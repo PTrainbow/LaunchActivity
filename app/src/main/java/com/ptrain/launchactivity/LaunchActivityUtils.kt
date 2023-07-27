@@ -17,9 +17,8 @@ object LaunchActivityUtils {
     private const val CLIENT_TRANSACTION_CLASS_NAME =
         "android.app.servertransaction.ClientTransaction"
 
-    private fun getIntentForTargetLaunch(): Intent? {
+    private inline fun getIntentForTargetLaunch(next: (message: Message) -> Message): Intent? {
         var intent: Intent? = null
-        var className = ""
         try {
             // >= Android 9, msg.obj 为 ClientTransaction
             // < Android 9, msg.obj 为 ActivityClientRecord
@@ -28,9 +27,10 @@ object LaunchActivityUtils {
                 val queue = Looper.getMainLooper().queue
 
                 // step2: 获取 mMessages 属性，进而获取 msg.obj -> ClientTransaction
-                val msg = ReflectUtils.reflect(queue).field("mMessages").get<Message>()
+                var msg = ReflectUtils.reflect(queue).field("mMessages").get<Message>()
+                msg = next(msg)
                 val msgObj = msg.obj
-                className = msg.obj::class.java.name
+                val className = msg.obj::class.java.name
 
                 // 检测合法性
                 if (className == CLIENT_TRANSACTION_CLASS_NAME) {
@@ -55,9 +55,10 @@ object LaunchActivityUtils {
                 val queue = ReflectUtils.reflect(looper).field("mQueue").get<MessageQueue>()
 
                 // step2: 获取 mMessages 属性，进而获取 msg.obj -> ActivityClientRecord
-                val msg = ReflectUtils.reflect(queue).field("mMessages").get<Message>()
+                var msg = ReflectUtils.reflect(queue).field("mMessages").get<Message>()
+                msg = next(msg)
                 val msgObj = msg.obj
-                className = msgObj::class.java.name
+                val className = msgObj::class.java.name
 
                 // step3: 获取 intent
                 if (className == ACTIVITY_RECORD_CLASS_NAME) {
@@ -65,7 +66,6 @@ object LaunchActivityUtils {
                         ReflectUtils.reflect(msgObj).field("intent").get<Intent>()
                 }
             }
-            Log.i(TAG, intent.toString())
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -81,7 +81,17 @@ object LaunchActivityUtils {
      *
      */
     fun isTargetActivity(activityClassName: String): Boolean {
-        return getIntentForTargetLaunch()?.component?.className?.contains(activityClassName)
+        val intent = getIntentForTargetLaunch {
+            it
+        }
+        if (intent == null) {
+            // next
+            getIntentForTargetLaunch {
+                ReflectUtils.reflect(it).field("next").get()
+            }
+        }
+        Log.i(TAG, intent.toString())
+        return intent?.component?.className?.contains(activityClassName)
             ?: false
     }
 }

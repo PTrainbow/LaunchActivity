@@ -12,6 +12,4 @@ BindApplication 和 StartActivityLocked 在 AMS 进程，会顺序的发送两�
 
 理论上存在获取失败的可能：比如 AMS 发送 Application 创建消息后，卡住，后续的 Activity 创建消息迟迟不发送，这样 MQ 获取不到对应 message 信息
 
-# 题外
-
-创建了个新工程，发现现在创建 Empty Activity 工程，默认开启 compose 了
+message.obj 如果为空，兜底再取一个 next
